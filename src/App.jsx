@@ -376,7 +376,7 @@ function Picker({ t, currentId, onPick, onClose }) {
 /* ============================================================
    SESSION BUILDER
    ============================================================ */
-function Builder({ t, plan, onSave, onResetToDefault, onClose }) {
+function Builder({ t, plan, unit = "kg", onSave, onResetToDefault, onClose }) {
   const [list, setList] = useState(plan.ex);
   const [open, setOpen] = useState(null);
   const [picking, setPicking] = useState(null); // index, or "add"
@@ -444,7 +444,10 @@ function Builder({ t, plan, onSave, onResetToDefault, onClose }) {
                     {ex.muscle} · {ex.equip}
                   </span>
                 </span>
-                <span style={{ fontFamily: MONO, fontSize: 11, color: t.brand, flexShrink: 0 }}>{it.sets}×{it.lo}-{it.hi}</span>
+                <span style={{ flexShrink: 0, textAlign: "right" }}>
+                  <span style={{ display: "block", fontFamily: MONO, fontSize: 11, color: t.brand }}>{it.sets}×{it.lo}-{it.hi}</span>
+                  {it.w > 0 && <span style={{ display: "block", fontFamily: MONO, fontSize: 10, color: t.live, marginTop: 3 }}>{it.w}{unit}</span>}
+                </span>
                 <ChevronRight size={14} color={t.mute} style={{ transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 150ms ease" }} />
               </button>
 
@@ -457,6 +460,12 @@ function Builder({ t, plan, onSave, onResetToDefault, onClose }) {
                     <button onClick={() => remove(n)} style={miniBtn(t, t.hot)} aria-label="Remove"><Trash2 size={13} /></button>
                   </div>
                   <Gauge t={t} compact label="Sets" value={it.sets} min={1} max={6} step={1} suffix="sets" onChange={(v) => patch(n, { sets: v })} />
+                  <Gauge t={t} compact label={it.w ? "Starting weight" : "Starting weight · auto"} value={it.w || 0} min={0} max={260} step={2.5} fine={1.25} suffix={it.w ? unit : "auto"} onChange={(v) => patch(n, { w: v })} color={t.brand} />
+                  <p style={{ fontFamily: MONO, fontSize: 9, color: t.mute, letterSpacing: "0.06em", lineHeight: 1.7, margin: "-4px 0 12px" }}>
+                    {it.w
+                      ? `THE FIRST SET LOADS AT ${it.w}${unit.toUpperCase()} UNTIL YOU HAVE LOGGED THIS LIFT ONCE.`
+                      : "LEAVE AT ZERO AND THE SLIDER USES YOUR LAST SESSION INSTEAD."}
+                  </p>
                   <Gauge t={t} compact label="Min reps" value={it.lo} min={1} max={25} step={1} suffix="reps" onChange={(v) => patch(n, { lo: v, hi: Math.max(v, it.hi) })} color={t.live} />
                   <Gauge t={t} compact label="Max reps" value={it.hi} min={1} max={30} step={1} suffix="reps" onChange={(v) => patch(n, { hi: v, lo: Math.min(v, it.lo) })} color={t.live} />
                   <Gauge t={t} compact label="Rest" value={it.rest} min={30} max={240} step={15} suffix="sec" onChange={(v) => patch(n, { rest: v })} color={t.mute} />
@@ -525,8 +534,8 @@ function Session({ t, plan, logs, unit, onFinish, onClose }) {
   const seedFor = useCallback((n) => {
     if (prev && prev.sets[n]) return prev.sets[n];
     if (prev && prev.sets.length) return prev.sets[prev.sets.length - 1];
-    return { w: 20, r: item.hi, rir: 2 };
-  }, [prev, item.hi]);
+    return { w: item.w > 0 ? item.w : 20, r: item.hi, rir: 2 };
+  }, [prev, item.hi, item.w]);
 
   const [w, setW] = useState(() => seedFor(0).w);
   const [r, setR] = useState(() => seedFor(0).r);
@@ -871,7 +880,7 @@ export default function App() {
 
       {running && <Session t={t} plan={running} logs={logs} unit={settings.unit} onFinish={finish} onClose={() => setRunning(null)} />}
       {building && (
-        <Builder t={t} plan={building}
+        <Builder t={t} plan={building} unit={settings.unit}
           onSave={(list) => { saveCustom({ ...custom, [building.id]: list }); setBuilding(null); }}
           onResetToDefault={() => {
             const next = { ...custom }; delete next[building.id];
@@ -928,8 +937,8 @@ function Train({ t, settings, custom, logs, now, onStart, onBuild, onSauna }) {
             <div key={it.ex + n} style={{ display: "flex", gap: 10, padding: "9px 0", borderBottom: `1px solid ${t.line}`, alignItems: "baseline" }}>
               <span style={{ fontFamily: MONO, fontSize: 10, color: t.mute, width: 18, flexShrink: 0 }}>{pad2(n + 1)}</span>
               <span style={{ flex: 1, fontSize: 14 }}>{EX[it.ex].name}</span>
-              <span style={{ fontFamily: MONO, fontSize: 10, color: prev ? t.live : t.mute, flexShrink: 0 }}>
-                {prev ? `${prev.sets[0].w}${settings.unit}` : "new"}
+              <span style={{ fontFamily: MONO, fontSize: 10, color: prev ? t.live : it.w > 0 ? t.brand : t.mute, flexShrink: 0 }}>
+                {prev ? `${prev.sets[0].w}${settings.unit}` : it.w > 0 ? `${it.w}${settings.unit}` : "new"}
               </span>
               <span style={{ fontFamily: MONO, fontSize: 11, color: t.brand, flexShrink: 0, width: 46, textAlign: "right" }}>{it.sets}×{it.lo}-{it.hi}</span>
             </div>
@@ -1173,6 +1182,7 @@ function ProgramTab({ t, settings, custom, now, save, onBuild, onReset }) {
                     {p.ex.map((it, n) => (
                       <div key={it.ex + n} style={{ display: "flex", gap: 8, padding: "5px 0", alignItems: "baseline" }}>
                         <span style={{ flex: 1, fontSize: 13, color: t.text }}>{EX[it.ex].name}</span>
+                        {it.w > 0 && <span style={{ fontFamily: MONO, fontSize: 10, color: t.live }}>{it.w}{settings.unit}</span>}
                         <Chip color={t.mute}>{EX[it.ex].equip}</Chip>
                         <span style={{ fontFamily: MONO, fontSize: 10, color: t.brand, width: 50, textAlign: "right" }}>{it.sets}×{it.lo}-{it.hi}</span>
                       </div>
