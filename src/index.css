@@ -1,0 +1,39 @@
+:root {
+  color-scheme: dark;
+  -webkit-text-size-adjust: 100%;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background: #07080C;
+}
+
+body {
+  overscroll-behavior-y: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Keyboard focus stays visible. Pointer focus does not add noise. */
+:focus-visible {
+  outline: 2px solid #00E5D0;
+  outline-offset: 2px;
+}
+
+button { font: inherit; }
+
+input[type="range"] { -webkit-appearance: none; appearance: none; background: transparent; }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 44px; height: 44px; opacity: 0; }
+input[type="range"]::-moz-range-thumb { width: 44px; height: 44px; opacity: 0; border: none; }
+
+input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.5; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

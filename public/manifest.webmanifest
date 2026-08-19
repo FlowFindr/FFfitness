@@ -1,0 +1,12 @@
+{
+  "name": "FlowFindr Fitness",
+  "short_name": "FlowFindr",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#07080C",
+  "theme_color": "#07080C",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
