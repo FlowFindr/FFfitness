@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-} from "recharts";
+import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from "react";
 import {
   Play, X, Check, SkipForward, Plus, Minus, RotateCcw, Flame, CalendarPlus, Repeat,
   Activity, Dumbbell, SlidersHorizontal, Footprints, Info, Trash2, Pencil, Trophy,
   ChevronRight, ChevronUp, ChevronDown, Search, Wrench, Shuffle, CornerDownRight,
 } from "lucide-react";
+
+/* Recharts is the single biggest thing we ship. Loading it only when the
+   Progress tab opens keeps it out of the first paint for everyone else. */
+const StrengthChart = lazy(() => import("./StrengthChart.jsx"));
 
 /* ============================================================
    FLOWFINDR FITNESS
@@ -1086,7 +1087,6 @@ function ProgressTab({ t, logs, settings }) {
     );
   }
 
-  const tick = { fill: t.mute, fontSize: 10, fontFamily: MONO };
   return (
     <div style={{ padding: 16 }}>
       <Label t={t}>Strength trend</Label>
@@ -1097,15 +1097,13 @@ function ProgressTab({ t, logs, settings }) {
         {exIds.map((id) => <option key={id} value={id}>{EX[id]?.name || id}</option>)}
       </select>
       <Panel t={t} style={{ padding: "16px 6px 6px" }}>
-        <ResponsiveContainer width="100%" height={195}>
-          <LineChart data={series} margin={{ left: -16, right: 12 }}>
-            <CartesianGrid stroke={t.line} />
-            <XAxis dataKey="date" tick={tick} axisLine={{ stroke: t.line }} tickLine={false} />
-            <YAxis tick={tick} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={{ background: t.panel, border: `1px solid ${t.brand}66`, borderRadius: 3, fontFamily: MONO, fontSize: 11, color: t.text }} />
-            <Line type="monotone" dataKey="e1rm" stroke={t.brand} strokeWidth={2} dot={{ fill: t.brand, r: 3 }} name={`Est. 1RM (${settings.unit})`} />
-          </LineChart>
-        </ResponsiveContainer>
+        <Suspense fallback={
+          <div style={{ height: 195, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: MONO, fontSize: 10, letterSpacing: "0.16em", textTransform: "uppercase", color: t.mute }}>
+            Drawing chart
+          </div>
+        }>
+          <StrengthChart t={t} series={series} unit={settings.unit} mono={MONO} />
+        </Suspense>
       </Panel>
       <p style={{ fontFamily: MONO, fontSize: 9, color: t.mute, margin: "10px 0 24px", lineHeight: 1.7, letterSpacing: "0.06em" }}>
         EPLEY ESTIMATE. FLAT FOR THREE WEEKS MEANS ADD A SET, OR CHECK SLEEP AND CALORIES.
