@@ -3,21 +3,35 @@
 A hypertrophy tracker built for one-handed use in a gym. Guided sessions, slider entry,
 automatic rest timers, weekly volume tracking, and calendar export.
 
-Dark cyberpunk interface, no build-time CSS framework, no backend.
+Dark cyberpunk interface, Tailwind v4 semantic tokens, no backend.
 
 ## Why it is built this way
 
 - **No backend.** Training data and custom sessions live on the device that logged them,
   via a small storage adapter in `src/App.jsx`. Anyone can open the public URL and start logging immediately
   with no sign-up, and nobody sees anyone else's data.
-- **Inline styles, no Tailwind.** The whole visual system is the `THEMES` object at the top
-  of `src/App.jsx`. Add a fourth entry and it shows up in the theme picker automatically.
-- **One file.** All components live in `src/App.jsx` so the programme, the UI, and the
-  storage layer can be read top to bottom.
+- **Tailwind v4, mid-migration.** Styling is moving from inline styles to Tailwind
+  utilities, one component per PR, with the app working throughout. Converted so far:
+  `Panel`, `Action`, `Label`, `Chip`. Still inline: `Gauge`, `Sheet`.
+- **Colour is a role, never a hex.** Converted components take a semantic `role` string
+  (`brand`, `live`, `hot`, `mute`) that maps to token classes such as `text-brand` or
+  `border-hot/40`, through static lookup objects. The lookups spell out every class in
+  full: Tailwind scans source text, so a name built as `` `text-${role}` `` would never
+  be generated.
+- **Themes swap at runtime.** `THEMES` at the top of `src/App.jsx` drives the picker's
+  labels, and `src/index.css` mirrors the same hex values as `[data-theme]` blocks
+  feeding an `@theme inline` token layer. A palette has to be added in both places.
+  A new `THEMES` entry on its own will appear in the picker but render with the default
+  palette in every converted component.
+- **Almost one file.** The programme, the UI, and the storage layer live in
+  `src/App.jsx` so they can be read top to bottom. The only piece split out is
+  `src/StrengthChart.jsx`, which is lazy-loaded to keep Recharts out of the initial
+  bundle.
 
 ## Run it locally
 
-Requires Node 18 or newer.
+Requires Node 20.19 or newer, or 22.12 or newer. That is Vite 7's `engines` range,
+and the build fails on Node 18.
 
 ```bash
 npm install
@@ -51,7 +65,9 @@ index.html                  meta tags, theme colour, manifest link
 public/manifest.webmanifest installable app config
 public/icon.svg             barbell mark
 src/main.jsx                React entry
-src/index.css               reset, focus rings, reduced-motion, slider hit targets
+src/index.css               Tailwind import, semantic token layer, the three palettes,
+                            reset, focus rings, reduced-motion, slider hit targets
+src/StrengthChart.jsx       Recharts strength trend, lazy-loaded by the Progress tab
 src/App.jsx                 everything else
 ```
 
@@ -59,7 +75,7 @@ src/App.jsx                 everything else
 
 | Section | What it controls |
 | --- | --- |
-| `THEMES` | Three palettes. Each defines `brand` (identity, completed sets, primary action), `live` (current set, rest timer, live data) and `hot` (failure sets and personal records). Roles never change meaning between themes. |
+| `THEMES` | Three palettes. Each defines `brand` (identity, completed sets, primary action), `live` (current set, rest timer, live data) and `hot` (failure sets and personal records). Roles never change meaning between themes. The same hex values are mirrored in `src/index.css` as `[data-theme]` blocks, which is what the converted components read. |
 | `store` | Storage adapter. Swap these two functions for Supabase later. |
 | `EX` | Exercise library, about 55 movements: name, muscle, equipment, coaching cue. |
 | `PROGRAMS` | Default 3, 4, and 5 day splits. Each entry is `S(exerciseId, sets, minReps, maxReps, restSeconds)`. User edits are stored separately under `fff:custom` and override these per session. |
@@ -104,9 +120,11 @@ the app in an auth check. Nothing else in the file touches persistence.
 
 ## Known trade-offs
 
-- The initial JS bundle is about 163 kB gzipped, most of it Recharts. Fine on mobile, but
-  if it matters, move `Stats` into its own file and `React.lazy` it so charts only load
-  when the Stats tab is opened.
+- The initial JS bundle is about 66 kB gzipped. Recharts is another 106 kB gzipped, but
+  it sits in a separate chunk that only loads when the Progress tab is opened.
+- `src/index.css` carries a Preflight compatibility rule restoring `<p>` margins, inside
+  `@layer base` so utilities still override it. It can go once every `<p>` carries an
+  explicit margin.
 - Weight sliders top out at 260. Raise the `max` on the weight `Gauge` in `Session` if you
   outgrow it.
 - Estimated 1RM uses the Epley formula, which drifts above roughly 12 reps. Treat it as a

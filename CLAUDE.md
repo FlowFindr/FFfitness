@@ -17,12 +17,15 @@ also shared publicly as a demo.
 
 ## Migration status
 
-Converted to Tailwind: `Panel`, `Action`.
-Still on inline styles: `Label`, `Chip`, `Gauge`, `Sheet`.
+Converted to Tailwind: `Panel`, `Action`, `Label`, `Chip`.
+Still on inline styles: `Gauge`, `Sheet`.
 
-`Panel` and `Action` still accept a `t` prop they no longer use. Drop those together
-in a single cleanup PR once enough components are converted, rather than churning
-call sites twice.
+`Panel`, `Action` and `Label` still accept a `t` prop they no longer use. Drop those
+together in a single cleanup PR once enough components are converted, rather than
+churning call sites twice. `Chip` never took one.
+
+`Label` carries a fifth role, `text`, on top of the three fixed role names, because
+one call site prints the date in the primary text colour.
 
 ## Token roles
 
