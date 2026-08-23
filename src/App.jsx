@@ -243,17 +243,45 @@ const Chip = ({ children, color }) => (
   <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color, border: `1px solid ${color}66`, padding: "3px 7px", borderRadius: 2, whiteSpace: "nowrap" }}>{children}</span>
 );
 
-function Action({ t, children, onClick, color, filled, style }) {
-  const c = color || t.brand;
+/* Role to class lookup. Every class string is written out in full because
+   Tailwind scans source text: a name built with `bg-${role}` would never be
+   generated. The glow references --ff-* rather than --color-*, since @theme
+   inline substitutes the token instead of emitting it as a runtime variable. */
+const ACTION_ROLE = {
+  brand: {
+    plain: "text-brand bg-brand/[7.843%] border-brand",
+    filled: "text-void bg-brand border-brand shadow-[0_0_24px_color-mix(in_oklab,var(--ff-brand)_33.333%,transparent)]",
+  },
+  live: {
+    plain: "text-live bg-live/[7.843%] border-live",
+    filled: "text-void bg-live border-live shadow-[0_0_24px_color-mix(in_oklab,var(--ff-live)_33.333%,transparent)]",
+  },
+  hot: {
+    plain: "text-hot bg-hot/[7.843%] border-hot",
+    filled: "text-void bg-hot border-hot shadow-[0_0_24px_color-mix(in_oklab,var(--ff-hot)_33.333%,transparent)]",
+  },
+  mute: {
+    plain: "text-mute bg-mute/[7.843%] border-mute",
+    filled: "text-void bg-mute border-mute shadow-[0_0_24px_color-mix(in_oklab,var(--ff-mute)_33.333%,transparent)]",
+  },
+};
+
+const ACTION_BASE =
+  "w-full flex items-center justify-center gap-2 cursor-pointer border rounded-[3px] " +
+  "px-[18px] py-[15px] text-[12px] font-bold uppercase tracking-[0.18em] " +
+  "transition-[background,box-shadow] duration-[120ms] ease-[ease] " +
+  "[-webkit-tap-highlight-color:transparent]";
+
+/* `t` is accepted but unused: colour now comes from the role classes. It stays
+   in the signature so the 16 call sites keep their existing t={t} prop. */
+function Action({ t, children, onClick, role = "brand", filled, style }) {
+  const roleCls = ACTION_ROLE[role] || ACTION_ROLE.brand;
   return (
-    <button onClick={onClick} style={{
-      fontFamily: MONO, fontSize: 12, letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 700,
-      color: filled ? t.void : c, background: filled ? c : `${c}14`,
-      border: `1px solid ${c}`, borderRadius: 3, padding: "15px 18px", width: "100%", cursor: "pointer",
-      display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-      boxShadow: filled ? `0 0 24px ${c}55` : "none",
-      transition: "background 120ms ease, box-shadow 120ms ease", WebkitTapHighlightColor: "transparent", ...style,
-    }}>{children}</button>
+    <button
+      onClick={onClick}
+      className={`${ACTION_BASE} ${filled ? roleCls.filled : roleCls.plain}`}
+      style={{ fontFamily: MONO, ...style }}
+    >{children}</button>
   );
 }
 
@@ -611,8 +639,8 @@ function Session({ t, plan, logs, unit, onFinish, onClose }) {
               <div style={{ width: `${(rest / restTotal) * 100}%`, height: "100%", background: t.live, transition: "width 900ms linear" }} />
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <Action t={t} color={t.mute} style={{ padding: 11 }} onClick={() => { setRest((s) => s + 30); setRestTotal((x) => x + 30); }}>+30s</Action>
-              <Action t={t} color={t.live} style={{ padding: 11 }} onClick={() => setRest(0)}><SkipForward size={14} /> Ready</Action>
+              <Action t={t} role="mute" style={{ padding: 11 }} onClick={() => { setRest((s) => s + 30); setRestTotal((x) => x + 30); }}>+30s</Action>
+              <Action t={t} role="live" style={{ padding: 11 }} onClick={() => setRest(0)}><SkipForward size={14} /> Ready</Action>
             </div>
           </div>
         ) : (
@@ -712,7 +740,7 @@ function Session({ t, plan, logs, unit, onFinish, onClose }) {
               })}
             </div>
 
-            <Action t={t} filled color={editing !== null ? t.live : t.brand} onClick={commit}>
+            <Action t={t} filled role={editing !== null ? "live" : "brand"} onClick={commit}>
               {editing !== null ? <><Pencil size={15} /> Save set {editing + 1}</> : <><Check size={15} /> Log set {sets.length + 1}</>}
             </Action>
             {editing !== null && (
@@ -730,7 +758,7 @@ function Session({ t, plan, logs, unit, onFinish, onClose }) {
             <p style={{ fontFamily: MONO, fontSize: 10, color: t.mute, letterSpacing: "0.12em", marginBottom: 12, lineHeight: 1.7 }}>
               ALL SETS IN. TAP ANY SET ABOVE TO CORRECT IT BEFORE MOVING ON.
             </p>
-            <Action t={t} filled color={isLast ? t.hot : t.brand} onClick={() => (isLast ? onFinish(done, elapsed) : setI(i + 1))}>
+            <Action t={t} filled role={isLast ? "hot" : "brand"} onClick={() => (isLast ? onFinish(done, elapsed) : setI(i + 1))}>
               {isLast ? <><Flame size={15} /> Finish session</> : <>Next · {EX[items[i + 1].ex].name}</>}
             </Action>
           </div>
@@ -756,7 +784,7 @@ function Sauna({ t, minutes, onClose }) {
       <p style={{ fontFamily: SANS, fontSize: 13, color: t.mute, textAlign: "center", maxWidth: 300, marginBottom: 22, lineHeight: 1.55 }}>
         Heat does not blunt muscle protein synthesis. Cold does. Water with salt in it on the way out.
       </p>
-      <div style={{ width: "100%", maxWidth: 320 }}><Action t={t} color={t.mute} onClick={onClose}>Done</Action></div>
+      <div style={{ width: "100%", maxWidth: 320 }}><Action t={t} role="mute" onClick={onClose}>Done</Action></div>
     </div>
   );
 }
@@ -951,8 +979,8 @@ function Train({ t, settings, custom, logs, now, onStart, onBuild, onSauna }) {
       </div>
       <Action t={t} filled onClick={() => onStart(plan)}><Play size={16} /> Start session</Action>
       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-        <Action t={t} color={t.live} style={{ padding: 12 }} onClick={() => onBuild(plan)}><Wrench size={14} /> Set up</Action>
-        <Action t={t} color={t.mute} style={{ padding: 12 }} onClick={() => setChoosing(true)}><Repeat size={14} /> Switch</Action>
+        <Action t={t} role="live" style={{ padding: 12 }} onClick={() => onBuild(plan)}><Wrench size={14} /> Set up</Action>
+        <Action t={t} role="mute" style={{ padding: 12 }} onClick={() => setChoosing(true)}><Repeat size={14} /> Switch</Action>
       </div>
     </Panel>
   );
@@ -972,10 +1000,10 @@ function Train({ t, settings, custom, logs, now, onStart, onBuild, onSauna }) {
             <div style={{ fontFamily: MONO, fontSize: 12, color: t.mute, marginBottom: 16 }}>
               {Object.values(doneToday.entries).reduce((a, v) => a + v.length, 0)} sets · {clock(doneToday.elapsed || 0)}
             </div>
-            <Action t={t} color={t.hot} onClick={onSauna}><Flame size={15} /> Sauna timer</Action>
+            <Action t={t} role="hot" onClick={onSauna}><Flame size={15} /> Sauna timer</Action>
           </Panel>
           <div style={{ marginTop: 8 }}>
-            <Action t={t} color={t.mute} onClick={() => setChoosing(true)}><Repeat size={14} /> Train something else</Action>
+            <Action t={t} role="mute" onClick={() => setChoosing(true)}><Repeat size={14} /> Train something else</Action>
           </div>
         </>
       ) : scheduled ? (
@@ -1005,7 +1033,7 @@ function Train({ t, settings, custom, logs, now, onStart, onBuild, onSauna }) {
             )}
           </Panel>
           <div style={{ marginTop: 8 }}>
-            <Action t={t} color={t.brand} onClick={() => setChoosing(true)}><Dumbbell size={15} /> Train anyway</Action>
+            <Action t={t} role="brand" onClick={() => setChoosing(true)}><Dumbbell size={15} /> Train anyway</Action>
           </div>
         </>
       )}
@@ -1048,7 +1076,7 @@ function Train({ t, settings, custom, logs, now, onStart, onBuild, onSauna }) {
                 </div>
                 <div style={{ display: "flex", gap: 7 }}>
                   <Action t={t} filled style={{ padding: 11 }} onClick={() => { setChoosing(false); onStart(p); }}><Play size={14} /> Start</Action>
-                  <Action t={t} color={t.live} style={{ padding: 11 }} onClick={() => { setChoosing(false); onBuild(p); }}><Wrench size={14} /> Set up</Action>
+                  <Action t={t} role="live" style={{ padding: 11 }} onClick={() => { setChoosing(false); onBuild(p); }}><Wrench size={14} /> Set up</Action>
                 </div>
               </Panel>
             );
@@ -1206,7 +1234,7 @@ function ProgramTab({ t, settings, custom, now, save, onBuild, onReset }) {
             </Panel>
           );
         })}
-        <Action t={t} color={t.live} onClick={download}><CalendarPlus size={15} /> Download whole week (.ics)</Action>
+        <Action t={t} role="live" onClick={download}><CalendarPlus size={15} /> Download whole week (.ics)</Action>
       </div>
 
       <Label t={t}>Logistics</Label>
@@ -1254,7 +1282,7 @@ function ProgramTab({ t, settings, custom, now, save, onBuild, onReset }) {
         })}
       </div>
 
-      <Action t={t} color={confirm ? t.hot : t.mute} onClick={() => (confirm ? (onReset(), setConfirm(false)) : setConfirm(true))}>
+      <Action t={t} role={confirm ? "hot" : "mute"} onClick={() => (confirm ? (onReset(), setConfirm(false)) : setConfirm(true))}>
         <RotateCcw size={14} /> {confirm ? "Tap again to erase everything" : "Clear training history"}
       </Action>
     </div>
