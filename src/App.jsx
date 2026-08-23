@@ -235,12 +235,41 @@ const Panel = ({ t, children, style, ...r }) => (
   <div {...r} className="bg-surface border border-line rounded-[5px]" style={style}>{children}</div>
 );
 
-const Label = ({ t, children, color }) => (
-  <div style={{ fontFamily: MONO, fontSize: 10, letterSpacing: "0.24em", color: color || t.mute, textTransform: "uppercase" }}>{children}</div>
+/* Role to class lookup, same rule as ACTION_ROLE below: every class string is
+   written out in full because Tailwind scans source text. `text` is a role here
+   because one call site prints the date in the primary text colour. */
+const LABEL_ROLE = {
+  brand: "text-brand",
+  live: "text-live",
+  hot: "text-hot",
+  mute: "text-mute",
+  text: "text-text",
+};
+
+const LABEL_BASE = "text-[10px] uppercase tracking-[0.24em]";
+
+/* `t` is accepted but unused: colour now comes from the role classes. It stays
+   in the signature so the existing call sites keep their t={t} prop.
+   fontFamily stays inline: the Tailwind mono stack differs from MONO. */
+const Label = ({ t, children, role = "mute" }) => (
+  <div className={`${LABEL_BASE} ${LABEL_ROLE[role] || LABEL_ROLE.mute}`} style={{ fontFamily: MONO }}>{children}</div>
 );
 
-const Chip = ({ children, color }) => (
-  <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color, border: `1px solid ${color}66`, padding: "3px 7px", borderRadius: 2, whiteSpace: "nowrap" }}>{children}</span>
+/* The border was `${color}66`. 0x66 is 102/255, exactly 40%, so /40 is an exact
+   translation of the old alpha, not an approximation. */
+const CHIP_ROLE = {
+  brand: "text-brand border-brand/40",
+  live: "text-live border-live/40",
+  hot: "text-hot border-hot/40",
+  mute: "text-mute border-mute/40",
+};
+
+const CHIP_BASE =
+  "border rounded-[2px] px-[7px] py-[3px] " +
+  "text-[9px] uppercase tracking-[0.12em] whitespace-nowrap";
+
+const Chip = ({ children, role = "mute" }) => (
+  <span className={`${CHIP_BASE} ${CHIP_ROLE[role] || CHIP_ROLE.mute}`} style={{ fontFamily: MONO }}>{children}</span>
 );
 
 /* Role to class lookup. Every class string is written out in full because
@@ -337,7 +366,7 @@ const Sheet = ({ t, title, subtitle, onClose, children, footer }) => (
   <div style={{ position: "fixed", inset: 0, background: t.void, zIndex: 70, display: "flex", flexDirection: "column" }}>
     <div style={{ padding: "13px 16px", borderBottom: `1px solid ${t.line}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
       <div>
-        <Label t={t} color={t.brand}>{title}</Label>
+        <Label t={t} role="brand">{title}</Label>
         {subtitle && <div style={{ fontFamily: MONO, fontSize: 11, color: t.mute, marginTop: 3 }}>{subtitle}</div>}
       </div>
       <button onClick={onClose} style={{ background: "none", border: "none", color: t.mute, cursor: "pointer", padding: 8 }} aria-label="Close"><X size={22} /></button>
@@ -382,7 +411,7 @@ function Picker({ t, currentId, onPick, onClose }) {
 
       {grouped.map(([muscle, list]) => (
         <div key={muscle} style={{ marginBottom: 18 }}>
-          <Label t={t} color={muscle === focusMuscle ? t.live : t.mute}>{muscle}</Label>
+          <Label t={t} role={muscle === focusMuscle ? "live" : "mute"}>{muscle}</Label>
           <div style={{ marginTop: 8 }}>
             {list.map((e) => {
               const on = e.id === currentId;
@@ -393,7 +422,7 @@ function Picker({ t, currentId, onPick, onClose }) {
                   display: "flex", alignItems: "center", gap: 10, WebkitTapHighlightColor: "transparent",
                 }}>
                   <span style={{ flex: 1, fontSize: 14, color: t.text, fontWeight: on ? 700 : 400 }}>{e.name}</span>
-                  <Chip color={t.mute}>{e.equip}</Chip>
+                  <Chip role="mute">{e.equip}</Chip>
                   {on && <Check size={15} color={t.brand} />}
                 </button>
               );
@@ -617,7 +646,7 @@ function Session({ t, plan, logs, unit, onFinish, onClose }) {
     <div style={{ position: "fixed", inset: 0, background: t.void, zIndex: 50, display: "flex", flexDirection: "column" }}>
       <div style={{ padding: "12px 16px", borderBottom: `1px solid ${t.line}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
         <div>
-          <Label t={t} color={t.brand}>{plan.name}</Label>
+          <Label t={t} role="brand">{plan.name}</Label>
           <div style={{ fontFamily: MONO, fontSize: 11, color: t.mute, marginTop: 3 }}>
             {pad2(i + 1)}/{pad2(items.length)} · {doneSets}/{totalSets} sets · {clock(elapsed)}
           </div>
@@ -631,7 +660,7 @@ function Session({ t, plan, logs, unit, onFinish, onClose }) {
       <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
         {rest > 0 ? (
           <div style={{ textAlign: "center", padding: "14px 0 22px" }}>
-            <Label t={t} color={t.live}>Rest</Label>
+            <Label t={t} role="live">Rest</Label>
             <div style={{ fontFamily: MONO, fontSize: 82, fontWeight: 700, color: t.live, lineHeight: 1, letterSpacing: "-0.04em", textShadow: `0 0 44px ${t.live}55`, margin: "10px 0 14px" }}>
               {clock(rest)}
             </div>
@@ -660,9 +689,9 @@ function Session({ t, plan, logs, unit, onFinish, onClose }) {
         )}
 
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-          <Chip color={t.brand}>{ex.muscle}</Chip>
-          <Chip color={t.mute}>{ex.equip}</Chip>
-          <Chip color={t.mute}>{item.sets} × {item.lo}-{item.hi}</Chip>
+          <Chip role="brand">{ex.muscle}</Chip>
+          <Chip role="mute">{ex.equip}</Chip>
+          <Chip role="mute">{item.sets} × {item.lo}-{item.hi}</Chip>
         </div>
         <h2 style={{ fontFamily: SANS, fontSize: 28, fontWeight: 800, letterSpacing: "-0.03em", color: t.text, margin: "0 0 14px", lineHeight: 1.08 }}>{ex.name}</h2>
 
@@ -776,7 +805,7 @@ function Sauna({ t, minutes, onClose }) {
   useEffect(() => { const x = setInterval(() => setS((v) => (v <= 0 ? 0 : v - 1)), 1000); return () => clearInterval(x); }, []);
   return (
     <div style={{ position: "fixed", inset: 0, background: t.void, zIndex: 60, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <Label t={t} color={t.hot}>Sauna · 90 to 95 degrees</Label>
+      <Label t={t} role="hot">Sauna · 90 to 95 degrees</Label>
       <div style={{ fontFamily: MONO, fontSize: 80, fontWeight: 700, color: t.hot, textShadow: `0 0 46px ${t.hot}55`, margin: "14px 0", lineHeight: 1, letterSpacing: "-0.04em" }}>{clock(s)}</div>
       <div style={{ width: "100%", maxWidth: 320, height: 4, background: t.panel2, borderRadius: 2, overflow: "hidden", marginBottom: 22 }}>
         <div style={{ width: `${(s / (minutes * 60)) * 100}%`, height: "100%", background: t.hot, transition: "width 900ms linear" }} />
@@ -959,9 +988,9 @@ function Train({ t, settings, custom, logs, now, onStart, onBuild, onSauna }) {
 
   const weekCount = Object.keys(logs).filter((d) => (now - new Date(d)) / 86400000 < 7).length;
 
-  const SessionCard = ({ plan, tag, tagColor }) => (
+  const SessionCard = ({ plan, tag, tagRole }) => (
     <Panel t={t} style={{ padding: 20 }}>
-      <Label t={t} color={tagColor || t.live}>{tag}</Label>
+      <Label t={t} role={tagRole || "live"}>{tag}</Label>
       <h2 style={{ fontSize: 32, fontWeight: 800, margin: "8px 0 4px", letterSpacing: "-0.035em", lineHeight: 1.04 }}>{plan.name}</h2>
       <div style={{ fontSize: 13, color: t.mute, marginBottom: 14 }}>{plan.focus}</div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 14 }}>
@@ -996,14 +1025,14 @@ function Train({ t, settings, custom, logs, now, onStart, onBuild, onSauna }) {
   return (
     <div style={{ padding: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
-        <Label t={t} color={t.text}>{longDate(now)}</Label>
+        <Label t={t} role="text">{longDate(now)}</Label>
         <Label t={t}>{partOfDay(now.getHours())} · {weekCount}/{settings.days}</Label>
       </div>
 
       {doneToday ? (
         <>
           <Panel t={t} style={{ padding: 20, borderColor: `${t.brand}66` }}>
-            <Label t={t} color={t.brand}>Logged today</Label>
+            <Label t={t} role="brand">Logged today</Label>
             <h2 style={{ fontSize: 26, fontWeight: 800, margin: "8px 0 6px", letterSpacing: "-0.03em" }}>{doneToday.name}</h2>
             <div style={{ fontFamily: MONO, fontSize: 12, color: t.mute, marginBottom: 16 }}>
               {Object.values(doneToday.entries).reduce((a, v) => a + v.length, 0)} sets · {clock(doneToday.elapsed || 0)}
@@ -1019,7 +1048,7 @@ function Train({ t, settings, custom, logs, now, onStart, onBuild, onSauna }) {
       ) : (
         <>
           <Panel t={t} style={{ padding: 20, borderColor: isRunDay ? `${t.live}55` : t.line }}>
-            <Label t={t} color={isRunDay ? t.live : t.mute}>{isRunDay ? "Run day" : "Rest day"}</Label>
+            <Label t={t} role={isRunDay ? "live" : "mute"}>{isRunDay ? "Run day" : "Rest day"}</Label>
             <h2 style={{ fontSize: 32, fontWeight: 800, margin: "8px 0 6px", letterSpacing: "-0.035em" }}>
               {isRunDay ? "5 kilometres" : "No session scheduled"}
             </h2>
@@ -1077,7 +1106,7 @@ function Train({ t, settings, custom, logs, now, onStart, onBuild, onSauna }) {
                 <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                   <span style={{ fontSize: 16, fontWeight: 700, flex: 1 }}>{p.name}</span>
                   <span style={{ fontFamily: MONO, fontSize: 10, color: t.mute }}>{DOW_SHORT[tpl.day].toUpperCase()}</span>
-                  {edited && <Chip color={t.live}>Custom</Chip>}
+                  {edited && <Chip role="live">Custom</Chip>}
                 </div>
                 <div style={{ fontSize: 12, color: t.mute, margin: "5px 0 11px" }}>
                   {p.ex.length} exercises · {p.ex.reduce((a, x) => a + x.sets, 0)} sets
@@ -1205,8 +1234,8 @@ function ProgramTab({ t, settings, custom, now, save, onBuild, onReset }) {
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontFamily: MONO, fontSize: 10, color: isToday ? t.live : t.mute, letterSpacing: "0.18em", width: 30 }}>{DOW_SHORT[d].toUpperCase()}</span>
                 <span style={{ fontSize: 15, fontWeight: 700, flex: 1 }}>{p ? p.name : run ? "5k run" : "Rest"}</span>
-                {isToday && <Chip color={t.live}>Today</Chip>}
-                {custom[tpl?.id] && <Chip color={t.brand}>Custom</Chip>}
+                {isToday && <Chip role="live">Today</Chip>}
+                {custom[tpl?.id] && <Chip role="brand">Custom</Chip>}
                 {run && <Footprints size={14} color={t.live} />}
               </div>
               {p && (
@@ -1220,7 +1249,7 @@ function ProgramTab({ t, settings, custom, now, save, onBuild, onReset }) {
                       <div key={it.ex + n} style={{ display: "flex", gap: 8, padding: "5px 0", alignItems: "baseline" }}>
                         <span style={{ flex: 1, fontSize: 13, color: t.text }}>{EX[it.ex].name}</span>
                         {it.w > 0 && <span style={{ fontFamily: MONO, fontSize: 10, color: t.live }}>{it.w}{settings.unit}</span>}
-                        <Chip color={t.mute}>{EX[it.ex].equip}</Chip>
+                        <Chip role="mute">{EX[it.ex].equip}</Chip>
                         <span style={{ fontFamily: MONO, fontSize: 10, color: t.brand, width: 50, textAlign: "right" }}>{it.sets}×{it.lo}-{it.hi}</span>
                       </div>
                     ))}
