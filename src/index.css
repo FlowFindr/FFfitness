@@ -85,3 +85,20 @@ input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); opaci
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ============================================================
+   PREFLIGHT COMPATIBILITY
+   Preflight zeroes the default <p> margins. Six paragraphs still
+   lean on the browser default for at least one side, so restore
+   it here. Inline margins on the element win over this rule, so
+   paragraphs that already declare their own spacing are untouched.
+
+   Sits in @layer base so any Tailwind utility still overrides it.
+
+   TODO: remove once all <p> elements carry explicit margins.
+   ============================================================ */
+@layer base {
+  p {
+    margin-block: 1em;
+  }
+}
