@@ -873,8 +873,16 @@ export default function App() {
       <div style={{ padding: "16px 16px 12px", borderBottom: `1px solid ${t.line}`, position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", inset: 0, background: `repeating-linear-gradient(0deg, transparent 0 3px, ${t.brand}06 3px 4px)`, pointerEvents: "none" }} />
         <div style={{ display: "flex", alignItems: "baseline", gap: 8, position: "relative" }}>
-          <span style={{ fontFamily: MONO, fontSize: 18, fontWeight: 700, letterSpacing: "0.2em", color: t.brand, textShadow: `0 0 22px ${t.brand}55` }}>FLOWFINDR</span>
-          <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: "0.22em", color: t.live }}>FITNESS</span>
+          {/* The wordmark doubles as a home button back to the landing page. The padding is
+              cancelled by an equal negative margin, so the tap target grows to about 44px for
+              a thumb without shifting the header by a pixel. */}
+          <a href="/landing.html" aria-label="FlowFindr Fitness home" style={{
+            display: "flex", alignItems: "baseline", gap: 8, textDecoration: "none",
+            padding: "11px 0", margin: "-11px 0", WebkitTapHighlightColor: "transparent",
+          }}>
+            <span style={{ fontFamily: MONO, fontSize: 18, fontWeight: 700, letterSpacing: "0.2em", color: t.brand, textShadow: `0 0 22px ${t.brand}55` }}>FLOWFINDR</span>
+            <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: "0.22em", color: t.live }}>FITNESS</span>
+          </a>
           <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: "0.18em", color: t.mute, marginLeft: "auto" }}>{settings.days}D / WK</span>
         </div>
       </div>
