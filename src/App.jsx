@@ -228,8 +228,11 @@ const bestE1rm = (logs, exId) =>
   history(logs, exId).reduce((m, s) => Math.max(m, ...s.sets.map((x) => e1rm(x.w, x.r))), 0);
 
 /* ---------------- primitives ---------------- */
+/* First component on the Tailwind token layer. `t` is destructured but unused:
+   it keeps the prop out of {...r} so it is not spread onto the DOM node.
+   Callers that override borderColor inline still win over these classes. */
 const Panel = ({ t, children, style, ...r }) => (
-  <div {...r} style={{ background: t.panel, border: `1px solid ${t.line}`, borderRadius: 5, ...style }}>{children}</div>
+  <div {...r} className="bg-surface border border-line rounded-[5px]" style={style}>{children}</div>
 );
 
 const Label = ({ t, children, color }) => (
@@ -838,7 +841,7 @@ export default function App() {
   const shared = { t, settings, custom, now };
 
   return (
-    <div style={{ minHeight: "100vh", background: t.void, color: t.text, paddingBottom: 78, fontFamily: SANS }}>
+    <div data-theme={settings.theme} style={{ minHeight: "100vh", background: t.void, color: t.text, paddingBottom: 78, fontFamily: SANS }}>
       <div style={{ padding: "16px 16px 12px", borderBottom: `1px solid ${t.line}`, position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", inset: 0, background: `repeating-linear-gradient(0deg, transparent 0 3px, ${t.brand}06 3px 4px)`, pointerEvents: "none" }} />
         <div style={{ display: "flex", alignItems: "baseline", gap: 8, position: "relative" }}>
