@@ -1,5 +1,18 @@
 @import "tailwindcss";
 
+/* Tailwind v4 auto-detects sources: every non-gitignored file in the project is
+   scanned as plain text. That pulls utilities out of files that use no Tailwind
+   at all -- inline-style strings like display:"grid" in the landing page, and
+   class names quoted in prose in the docs -- and emits them as dead CSS in the
+   app bundle. The landing page is a separate Vite entry with its own stylesheet,
+   so exclude it and the docs explicitly. */
+@source not "./Landing.jsx";
+@source not "./landing-main.jsx";
+@source not "./landing.css";
+@source not "../landing.html";
+@source not "../README.md";
+@source not "../CLAUDE.md";
+
 /* ============================================================
    SEMANTIC TOKEN LAYER
    Utilities reference roles, never raw colours: bg-surface,

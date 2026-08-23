@@ -1,0 +1,35 @@
+/* Landing page only. The app's own reset and token layer live in index.css and
+   are not loaded here: this is a separate Vite entry with no Tailwind. */
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+/* Default theme's void, so there is no white flash before React mounts. */
+body { background: #06070F; }
+
+a { color: inherit; }
+
+@keyframes floaty {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50%      { transform: translateY(-14px) rotate(-1deg); }
+}
+.lp-float { animation: floaty 6s ease-in-out infinite; }
+
+/* The .dc.html source has no breakpoints: every grid is a fixed column count.
+   This app is used on a phone, so the columns collapse rather than overflow.
+   Nothing above this line changes any colour or spacing from the design. */
+@media (max-width: 900px) {
+  .lp-hero, .lp-grid-2, .lp-grid-3, .lp-grid-4,
+  .lp-session, .lp-split, .lp-flow {
+    grid-template-columns: 1fr !important;
+  }
+  .lp-hero { gap: 48px !important; }
+  .lp-h1 { font-size: 40px !important; }
+  .lp-h2 { font-size: 27px !important; }
+  .lp-pad { padding: 28px !important; }
+  .lp-tilt { transform: none !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-float { animation: none; }
+}
