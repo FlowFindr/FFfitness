@@ -1,3 +1,51 @@
+@import "tailwindcss";
+
+/* ============================================================
+   SEMANTIC TOKEN LAYER
+   Utilities reference roles, never raw colours: bg-surface,
+   text-brand, border-hot. Swapping the palette is a matter of
+   changing one data-theme attribute.
+
+   `@theme inline` is deliberate. Plain `@theme` would resolve
+   var(--ff-*) once at :root, freezing the palette there, and a
+   [data-theme] wrapper further down the tree could never change
+   it. `inline` emits var(--ff-*) into the utility itself, so it
+   resolves against the nearest themed ancestor at use time.
+   ============================================================ */
+@theme inline {
+  --color-brand: var(--ff-brand);
+  --color-live: var(--ff-live);
+  --color-hot: var(--ff-hot);
+  --color-surface: var(--ff-panel);
+
+  --color-void: var(--ff-void);
+  --color-panel2: var(--ff-panel2);
+  --color-line: var(--ff-line);
+  --color-text: var(--ff-text);
+  --color-mute: var(--ff-mute);
+}
+
+/* Palettes. Hex values are copied verbatim from THEMES in src/App.jsx,
+   which stays the single source of truth for the picker's labels. */
+:root,
+[data-theme="ultraviolet-circuit"] {
+  --ff-void: #06070F; --ff-panel: #0D1020; --ff-panel2: #151A2E; --ff-line: #242B45;
+  --ff-brand: #7C6BFF; --ff-live: #00E5FF; --ff-hot: #FF4D8D;
+  --ff-text: #EEF1FF; --ff-mute: #9AA6C4;
+}
+
+[data-theme="nightdrive"] {
+  --ff-void: #0A0818; --ff-panel: #140F26; --ff-panel2: #1C1636; --ff-line: #2C2450;
+  --ff-brand: #8B5CF6; --ff-live: #22D3EE; --ff-hot: #FF5C9E;
+  --ff-text: #F3F0FF; --ff-mute: #ADA3CB;
+}
+
+[data-theme="cyan-prime"] {
+  --ff-void: #04060E; --ff-panel: #0A0F1C; --ff-panel2: #101827; --ff-line: #1D2940;
+  --ff-brand: #00E5FF; --ff-live: #7B5CFF; --ff-hot: #FF3D7F;
+  --ff-text: #ECF6FF; --ff-mute: #93A6C0;
+}
+
 :root {
   color-scheme: dark;
   -webkit-text-size-adjust: 100%;
@@ -35,5 +83,22 @@ input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); opaci
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================================
+   PREFLIGHT COMPATIBILITY
+   Preflight zeroes the default <p> margins. Six paragraphs still
+   lean on the browser default for at least one side, so restore
+   it here. Inline margins on the element win over this rule, so
+   paragraphs that already declare their own spacing are untouched.
+
+   Sits in @layer base so any Tailwind utility still overrides it.
+
+   TODO: remove once all <p> elements carry explicit margins.
+   ============================================================ */
+@layer base {
+  p {
+    margin-block: 1em;
   }
 }
