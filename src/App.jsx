@@ -3,7 +3,12 @@ import {
   Play, X, Check, SkipForward, Plus, Minus, RotateCcw, Flame, CalendarPlus, Repeat,
   Activity, Dumbbell, SlidersHorizontal, Footprints, Info, Trash2, Pencil, Trophy,
   ChevronRight, ChevronUp, ChevronDown, Search, Wrench, Shuffle, CornerDownRight,
+  UserRound,
 } from "lucide-react";
+
+/* Lazy for the same reason as StrengthChart below: Login pulls in the Supabase
+   SDK, which is about 60 kB gzipped and useless to a guest logging sets. */
+const Login = lazy(() => import("./Login.jsx"));
 
 /* Recharts is the single biggest thing we ship. Loading it only when the
    Progress tab opens keeps it out of the first paint for everyone else. */
@@ -860,6 +865,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(null);
   const [building, setBuilding] = useState(null);
+  const [account, setAccount] = useState(null);
+  const [showLogin, setShowLogin] = useState(false);
   const [sauna, setSauna] = useState(false);
   const [now, setNow] = useState(new Date());
 
@@ -884,6 +891,13 @@ export default function App() {
   }, []);
 
   const t = THEMES[settings.theme] || THEMES["ultraviolet-circuit"];
+  useEffect(() => {
+    let stop;
+    let dead = false;
+    import("./data").then((d) => { if (!dead) stop = d.onAuthChange(setAccount); });
+    return () => { dead = true; stop?.(); };
+  }, []);
+
   const saveSettings = (n) => { setSettings(n); store.set("fff:settings", n); };
   const saveLogs = (n) => { setLogs(n); store.set("fff:logs", n); };
   const saveCustom = (n) => { setCustom(n); store.set("fff:custom", n); };
@@ -913,6 +927,14 @@ export default function App() {
             <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: "0.22em", color: t.live }}>FITNESS</span>
           </a>
           <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: "0.18em", color: t.mute, marginLeft: "auto" }}>{settings.days}D / WK</span>
+        {/* Padding cancelled by an equal negative margin, so the tap target is
+            about 44px without changing the header height. */}
+        <button onClick={() => setShowLogin(true)} aria-label={account ? "Account" : "Sign in"} style={{
+          background: "none", border: "none", padding: 12, margin: -12, cursor: "pointer",
+          color: account ? t.live : t.mute, display: "flex", WebkitTapHighlightColor: "transparent",
+        }}>
+          <UserRound size={16} />
+        </button>
         </div>
       </div>
 
@@ -958,6 +980,21 @@ export default function App() {
           onClose={() => setBuilding(null)} />
       )}
       {sauna && <Sauna t={t} minutes={settings.sauna} onClose={() => setSauna(false)} />}
+      {showLogin && (
+        <Suspense fallback={
+          <div style={{
+            position: "fixed", inset: 0, zIndex: 50, background: t.void, display: "flex",
+            alignItems: "center", justifyContent: "center", fontFamily: MONO, fontSize: 10,
+            letterSpacing: "0.16em", textTransform: "uppercase", color: t.mute,
+          }}>Loading</div>
+        }>
+          <Login
+            account={account}
+            local={{ settings, logs, custom }}
+            onDismiss={() => setShowLogin(false)}
+            onSignedIn={() => setShowLogin(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }
