@@ -93,6 +93,10 @@ const diamond = (color, size) => ({
 });
 
 export default function Landing({ theme = "ultraviolet-circuit", appHref = "/" }) {
+  /* "Log in" opens the app with the auth sheet already up. The two other
+     calls to action deliberately do not: the app works signed out, and
+     the training flow is never put behind a login wall. */
+  const loginHref = `${appHref}${appHref.includes("?") ? "&" : "?"}auth`;
   const t = THEMES[theme] || THEMES["ultraviolet-circuit"];
   const v = buildVals(t);
 
@@ -115,7 +119,7 @@ export default function Landing({ theme = "ultraviolet-circuit", appHref = "/" }
             FlowFindr <span style={{ color: t.mute, fontWeight: 600 }}>Fitness</span>
           </span>
         </div>
-        <a href={appHref} style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", color: t.text, border: `1px solid ${t.line}`, padding: "11px 18px", borderRadius: 3, textDecoration: "none" }}>Log in</a>
+        <a href={loginHref} style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", color: t.text, border: `1px solid ${t.line}`, padding: "11px 18px", borderRadius: 3, textDecoration: "none" }}>Log in</a>
       </div>
 
       {/* HERO */}

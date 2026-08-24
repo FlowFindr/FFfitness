@@ -3,7 +3,12 @@ import {
   Play, X, Check, SkipForward, Plus, Minus, RotateCcw, Flame, CalendarPlus, Repeat,
   Activity, Dumbbell, SlidersHorizontal, Footprints, Info, Trash2, Pencil, Trophy,
   ChevronRight, ChevronUp, ChevronDown, Search, Wrench, Shuffle, CornerDownRight,
+  UserRound,
 } from "lucide-react";
+
+/* Lazy for the same reason as StrengthChart below: Login pulls in the Supabase
+   SDK, which is about 60 kB gzipped and useless to a guest logging sets. */
+const Login = lazy(() => import("./Login.jsx"));
 
 /* Recharts is the single biggest thing we ship. Loading it only when the
    Progress tab opens keeps it out of the first paint for everyone else. */
@@ -43,6 +48,20 @@ const THEMES = {
 
 const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 const SANS = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+
+/* Which top-level keys differ between two plain-JSON maps, as
+   [changed, removed]. logs is keyed by date and custom by template id, and both
+   mirror to one database row per key, so a whole-object save has to be reduced
+   to the rows that actually moved. A stringify compare is enough here: both
+   objects are built by this file from JSON primitives, and the cost of a false
+   positive is one redundant upsert, which is idempotent. */
+const diffKeys = (before, after) => {
+  const a = after ?? {};
+  const b = before ?? {};
+  const changed = Object.keys(a).filter((k) => JSON.stringify(b[k]) !== JSON.stringify(a[k]));
+  const removed = Object.keys(b).filter((k) => !(k in a));
+  return [changed, removed];
+};
 
 /* ---------------- storage ---------------- */
 const mem = {};
@@ -860,6 +879,23 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(null);
   const [building, setBuilding] = useState(null);
+  const [account, setAccount] = useState(null);
+  /* The landing page is a separate bundle, so its "Log in" link cannot set
+     state here. It navigates to /?auth instead, which this reads once on
+     mount. The marker is stripped straight after so a refresh, or a back
+     navigation, does not reopen the sheet. */
+  const [showLogin, setShowLogin] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return new URLSearchParams(window.location.search).has("auth");
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("auth")) return;
+    url.searchParams.delete("auth");
+    window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+  }, []);
   const [sauna, setSauna] = useState(false);
   const [now, setNow] = useState(new Date());
 
@@ -884,9 +920,47 @@ export default function App() {
   }, []);
 
   const t = THEMES[settings.theme] || THEMES["ultraviolet-circuit"];
-  const saveSettings = (n) => { setSettings(n); store.set("fff:settings", n); };
-  const saveLogs = (n) => { setLogs(n); store.set("fff:logs", n); };
-  const saveCustom = (n) => { setCustom(n); store.set("fff:custom", n); };
+  useEffect(() => {
+    let stop;
+    let dead = false;
+    import("./data").then((d) => { if (!dead) stop = d.onAuthChange(setAccount); });
+    return () => { dead = true; stop?.(); };
+  }, []);
+
+  /* Mirror a local write into the background queue. Three things matter here.
+     Signed-out users return early, so they create no rows and never pay for the
+     Supabase chunk. The import is dynamic for the same reason. And nothing is
+     awaited: local state and localStorage are already updated by the time this
+     runs, so a flat network or a paused project cannot reach the UI. */
+  const mirror = useCallback((fn) => {
+    if (!account) return;
+    import("./data").then(fn).catch(() => {});
+  }, [account]);
+
+  const saveSettings = (n) => {
+    setSettings(n); store.set("fff:settings", n);
+    mirror((d) => d.queueSettings(n));
+  };
+
+  const saveLogs = (n) => {
+    const before = logs;
+    setLogs(n); store.set("fff:logs", n);
+    mirror((d) => {
+      const [changed, removed] = diffKeys(before, n);
+      changed.forEach((k) => d.queueWorkout(k, n[k]));
+      removed.forEach((k) => d.queueWorkoutDelete(k));
+    });
+  };
+
+  const saveCustom = (n) => {
+    const before = custom;
+    setCustom(n); store.set("fff:custom", n);
+    mirror((d) => {
+      const [changed, removed] = diffKeys(before, n);
+      changed.forEach((k) => d.queuePlan(k, n[k]));
+      removed.forEach((k) => d.queuePlanDelete(k));
+    });
+  };
 
   const finish = (entries, elapsed) => {
     saveLogs({ ...logs, [todayKey(new Date())]: { sessionId: running.id, name: running.name, entries, elapsed } });
@@ -913,6 +987,24 @@ export default function App() {
             <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: "0.22em", color: t.live }}>FITNESS</span>
           </a>
           <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: "0.18em", color: t.mute, marginLeft: "auto" }}>{settings.days}D / WK</span>
+        {/* Padding cancelled by an equal negative margin, so the tap target is
+            about 44px without changing the header height. */}
+        <button onClick={() => setShowLogin(true)}
+          aria-label={account ? "Profile, signed in" : "Profile, sign in"} style={{
+          background: "none", border: "none", padding: 12, margin: -12, cursor: "pointer",
+          color: account ? t.live : t.mute, display: "flex", alignItems: "center", gap: 6,
+          WebkitTapHighlightColor: "transparent",
+        }}>
+          <UserRound size={16} />
+          {/* The icon alone was too easy to miss mid-workout. The word carries the
+              primary text colour rather than the icon's state colour, so it stays
+              legible whether or not anyone is signed in; the icon keeps the state. */}
+          <span style={{
+            fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: "0.18em",
+            textTransform: "uppercase", color: t.text,
+            textDecoration: "underline", textUnderlineOffset: 3,
+          }}>Profile</span>
+        </button>
         </div>
       </div>
 
@@ -958,6 +1050,21 @@ export default function App() {
           onClose={() => setBuilding(null)} />
       )}
       {sauna && <Sauna t={t} minutes={settings.sauna} onClose={() => setSauna(false)} />}
+      {showLogin && (
+        <Suspense fallback={
+          <div style={{
+            position: "fixed", inset: 0, zIndex: 50, background: t.void, display: "flex",
+            alignItems: "center", justifyContent: "center", fontFamily: MONO, fontSize: 10,
+            letterSpacing: "0.16em", textTransform: "uppercase", color: t.mute,
+          }}>Loading</div>
+        }>
+          <Login
+            account={account}
+            local={{ settings, logs, custom }}
+            onDismiss={() => setShowLogin(false)}
+            onSignedIn={() => setShowLogin(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }

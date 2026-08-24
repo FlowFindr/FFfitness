@@ -3,13 +3,16 @@
 A hypertrophy tracker built for one-handed use in a gym. Guided sessions, slider entry,
 automatic rest timers, weekly volume tracking, and calendar export.
 
-Dark cyberpunk interface, Tailwind v4 semantic tokens, no backend.
+Dark cyberpunk interface, Tailwind v4 semantic tokens, local-first storage.
 
 ## Why it is built this way
 
-- **No backend.** Training data and custom sessions live on the device that logged them,
-  via a small storage adapter in `src/App.jsx`. Anyone can open the public URL and start logging immediately
-  with no sign-up, and nobody sees anyone else's data.
+- **Local-first.** Training data and custom sessions live on the device that logged them,
+  via a small storage adapter in `src/App.jsx`. Anyone can open the public URL and start
+  logging immediately with no sign-up. Accounts are being added on top of this rather than
+  in front of it: the device stays the source of truth, and the cloud is a mirror that
+  catches up when there is signal. Gyms eat reception, so nothing a user taps is ever
+  allowed to wait on a network round trip.
 - **Tailwind v4, mid-migration.** Styling is moving from inline styles to Tailwind
   utilities, one component per PR, with the app working throughout. Converted so far:
   `Panel`, `Action`, `Label`, `Chip`. Still inline: `Gauge`, `Sheet`.
@@ -82,7 +85,7 @@ src/App.jsx                 everything else
 | Section | What it controls |
 | --- | --- |
 | `THEMES` | Three palettes. Each defines `brand` (identity, completed sets, primary action), `live` (current set, rest timer, live data) and `hot` (failure sets and personal records). Roles never change meaning between themes. The same hex values are mirrored in `src/index.css` as `[data-theme]` blocks, which is what the converted components read. |
-| `store` | Storage adapter. Swap these two functions for Supabase later. |
+| `store` | Storage adapter. Every byte the app persists goes through here, which is why adding sync touches so little else. Reads stay local; the cloud mirror is layered on top rather than replacing it. |
 | `EX` | Exercise library, about 55 movements: name, muscle, equipment, coaching cue. |
 | `PROGRAMS` | Default 3, 4, and 5 day splits. Each entry is `S(exerciseId, sets, minReps, maxReps, restSeconds)`. User edits are stored separately under `fff:custom` and override these per session. |
 | `Builder` | The Set up screen: swap, reorder, add, remove, and tune sets, reps and rest. |
@@ -118,11 +121,140 @@ Add an exercise to `EX`, then reference its key in `PROGRAMS`. Example:
 S("pendlay-row", 4, 6, 10, 180)   // 4 sets of 6 to 10, 3 min rest
 ```
 
-## Adding accounts and sync later
+## Where this is going
 
-Only the `store` object needs to change. Create a Supabase project, add a `logs` table
-keyed by user id, then replace `store.get` and `store.set` with Supabase queries and wrap
-the app in an auth check. Nothing else in the file touches persistence.
+The app is moving from a single-user tool to a small product. Three stages:
+
+1. **Now.** One user, no accounts, everything in `localStorage`.
+2. **Private beta, from around September 2026.** About a dozen friends, each with their
+   own account and their own synced history.
+3. **Public launch, targeted late October 2026.** Open self-serve sign-up, with enough
+   commercial groundwork that a paid tier later is a config change, not a migration.
+
+Two commitments shape every decision below. **The app works before you have an account**,
+so sign-up is offered once someone has data worth keeping rather than as a wall in front
+of the first session. And **nothing is manual for the admin**: no hand-created accounts,
+no manual password resets.
+
+## Adding accounts and sync
+
+An earlier version of this README said to replace `store.get` and `store.set` with
+Supabase queries. Do not. That version of the app breaks in a gym basement, where the
+network is worst and logging a set matters most. Supabase goes *alongside* the storage
+adapter, not in place of it.
+
+**Provider.** Supabase: hosted Postgres with auth attached. Org `Flowfindr`, project
+`FlowFindr-Fitness`, ref `qnnqnyptmhznlfiszvtn`, region `ap-southeast-2` (Sydney).
+Region cannot be changed after a project is created, so getting Sydney meant a new
+project rather than an edit. It was picked over AWS
+(Cognito plus DynamoDB or RDS plus API Gateway) because it is plain Postgres underneath,
+so `pg_dump` moves the data to RDS or anywhere else without a rewrite. The AWS stack is
+several times the setup for a solo developer and has no equivalent of Row Level Security,
+meaning authorisation gets hand-written per endpoint. The lock-in that does exist lives in
+the auth layer and the client SDK, and is contained by routing every query through
+`src/data/` so no component imports `supabase` directly.
+
+**Shape.** Three tables, mirroring the three storage keys:
+
+| Table | Rows | Mirrors |
+| --- | --- | --- |
+| `profiles` | one per user | `fff:settings`, plus display name and plan |
+| `workouts` | one per user per day | `fff:logs` |
+| `plans` | one per user per customised template | `fff:custom` |
+
+The `entries` and `settings` columns are `jsonb`, holding the same objects the app already
+builds. On login the `logs` object is reassembled from `workouts` rows in the exact shape
+`src/App.jsx` expects, so no existing read site changes.
+
+Every table gets Row Level Security with both a `using` and a `with check` clause. The
+anon key ships inside the JavaScript bundle by design; RLS is the only thing keeping one
+person's training history away from another's.
+
+**Sign-up.** Logged-out users stay on `localStorage` alone and create no database rows.
+On successful sign-up, a one-time import pushes their existing local history into the new
+account. Supabase anonymous sign-ins were considered and rejected: they write a real
+`auth.users` row for every visitor, have no automatic cleanup, count toward monthly active
+users, and need CAPTCHA to avoid abuse. The import gives the same experience without any
+of it.
+
+**Email.** A custom SMTP provider is required, not optional. Without one, Supabase Auth
+refuses to deliver mail to any address outside the project team, so confirmation and
+password-reset emails to friends silently never arrive. **This is not configured yet, and
+it is the one thing blocking the beta** — sign-up will appear to work while the
+confirmation email goes nowhere.
+
+Setting it up, in order:
+
+1. Create a Resend account and add `flowfindr.com.au` as a sending domain.
+2. Publish the DKIM and SPF records Resend gives you on the domain's DNS. Until the
+   domain verifies, Resend will only deliver to your own address, which fails in exactly
+   the same silent way as having no SMTP at all.
+3. Create a Resend SMTP credential. The host is `smtp.resend.com`, port `587`, username
+   `resend`, password the API key.
+4. Either paste those into the dashboard at Authentication -> Emails -> SMTP, or apply
+   them with the Management API:
+
+```bash
+# Token from https://supabase.com/dashboard/account/tokens — treat it as a secret.
+export SUPABASE_ACCESS_TOKEN="..."
+export PROJECT_REF="qnnqnyptmhznlfiszvtn"
+
+curl -X PATCH "https://api.supabase.com/v1/projects/$PROJECT_REF/config/auth" \
+  -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "external_email_enabled": true,
+    "mailer_autoconfirm": false,
+    "smtp_admin_email": "no-reply@flowfindr.com.au",
+    "smtp_host": "smtp.resend.com",
+    "smtp_port": 587,
+    "smtp_user": "resend",
+    "smtp_pass": "YOUR_RESEND_API_KEY",
+    "smtp_sender_name": "FlowFindr Fitness"
+  }'
+```
+
+5. Send yourself a password reset and confirm it arrives.
+
+With custom SMTP configured the default cap is 30 auth emails per hour, adjustable on the
+project's Auth rate limits page. Twelve friends signing up will not come close.
+
+**Environment.** Two variables, `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
+Both are committed to `.env`, on purpose: Vite compiles `VITE_*` into the browser bundle,
+so neither can be secret, and keeping them in the repo stops Preview and Production
+drifting apart while letting a fresh clone build a working app. Row Level Security, not
+the obscurity of the key, is what separates one person's history from another's.
+
+Vite bakes these in at build time, so a deployment does not pick up a change until it is
+rebuilt. `.env.local` overrides `.env` locally and is covered by the `*.local` rule in
+`.gitignore`; that is where anything genuinely secret goes, such as the `service_role`
+key or a Supabase personal access token. Neither may ever carry a `VITE_` prefix.
+
+The publishable key (`sb_publishable_...`) is used rather than the legacy JWT anon key,
+because it rotates independently of the project's JWT secret.
+
+**Data layer.** `supabase/migrations/` holds the schema. `src/data/` holds the access
+layer and is the only place allowed to import `supabase`:
+
+| Module | Does |
+| --- | --- |
+| `client.js` | Creates the client, or exports `null` when the env vars are absent. Every caller treats `null` as "carry on locally". |
+| `auth.js` | Sign up, sign in, sign out, password reset, auth-change subscription. Resolves rather than throws; logged-out is a normal state. |
+| `sync.js` | The write queue. One pending op per `(table, key)`, drained on `online` and on tab focus. A failed flush leaves the queue intact and is never shown to the user. |
+| `index.js` | The barrel the app imports from. |
+
+## Before making it public
+
+- Data export and account deletion. Training data is personal data under the Australian
+  Privacy Act and GDPR, and both are far cheaper to design in than to retrofit.
+- A privacy policy and terms of use, linked from the landing page and the sign-up form.
+- Daily backups, which is the actual reason to move off the free tier.
+- Free Supabase projects pause after about a week of no traffic. Harmless during the beta,
+  worth removing before launch.
+
+Cost today is nothing: the free tier covers 50,000 monthly active users and 500 MB of
+database, and a set is four numbers. The first real spend is Supabase Pro at 25 USD a
+month, triggered by launch rather than by the size of the beta.
 
 ## Known trade-offs
 
