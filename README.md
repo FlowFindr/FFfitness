@@ -24,9 +24,10 @@ Dark cyberpunk interface, Tailwind v4 semantic tokens, no backend.
   A new `THEMES` entry on its own will appear in the picker but render with the default
   palette in every converted component.
 - **Almost one file.** The programme, the UI, and the storage layer live in
-  `src/App.jsx` so they can be read top to bottom. The only piece split out is
-  `src/StrengthChart.jsx`, which is lazy-loaded to keep Recharts out of the initial
-  bundle.
+  `src/App.jsx` so they can be read top to bottom. Two pieces sit outside it:
+  `src/StrengthChart.jsx`, lazy-loaded to keep Recharts out of the initial bundle,
+  and `src/Landing.jsx`, the marketing page, which is a second Vite entry with its
+  own bundle so it costs the app nothing.
 
 ## Run it locally
 
@@ -61,13 +62,18 @@ manifest makes it launch full screen with no browser chrome.
 ## Project layout
 
 ```
-index.html                  meta tags, theme colour, manifest link
+index.html                  app entry: meta tags, theme colour, manifest link
+landing.html                landing page entry: marketing meta tags, Open Graph
 public/manifest.webmanifest installable app config
 public/icon.svg             barbell mark
-src/main.jsx                React entry
+src/main.jsx                React entry for the app
 src/index.css               Tailwind import, semantic token layer, the three palettes,
                             reset, focus rings, reduced-motion, slider hit targets
 src/StrengthChart.jsx       Recharts strength trend, lazy-loaded by the Progress tab
+src/landing-main.jsx        React entry for the landing page
+src/Landing.jsx             landing page, inline styles, no Tailwind
+src/landing.css             landing page reset and its one breakpoint
+src/theme.js                palette copy the landing page reads, mirrors THEMES
 src/App.jsx                 everything else
 ```
 

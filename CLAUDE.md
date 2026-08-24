@@ -5,7 +5,10 @@ also shared publicly as a demo.
 
 ## Architecture
 
-- Single-file React 18 app in `src/App.jsx`. Vite build. Deployed to Vercel from GitHub.
+- React 18, Vite build, deployed to Vercel from GitHub. Two entries: the app at
+  `index.html` -> `src/App.jsx`, and the marketing landing page at `landing.html` ->
+  `src/Landing.jsx`. The landing page is a separate bundle on inline styles, no
+  Tailwind, and `src/index.css` excludes it with `@source not`.
 - No backend. All persistence is `localStorage`.
 - Styling is mid-migration from inline styles to Tailwind v4. Strangler pattern:
   one component per PR, the app stays working throughout.
@@ -83,6 +86,9 @@ Themes: `ultraviolet-circuit` (default), `nightdrive`, `cyan-prime`.
 - Estimated 1RM uses Epley, which drifts above roughly 12 reps. Trend line, not a
   true max.
 - Recharts is lazy-loaded so it only costs bundle size when the Progress tab opens.
+- The palette exists in three places: `THEMES` in `src/App.jsx`, the `[data-theme]`
+  blocks in `src/index.css`, and `THEMES` in `src/theme.js` for the landing page.
+  Change a hex in one and the others diverge silently. No build check catches it.
 
 ## Context that does not live in the code
 
