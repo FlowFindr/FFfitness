@@ -880,7 +880,22 @@ export default function App() {
   const [running, setRunning] = useState(null);
   const [building, setBuilding] = useState(null);
   const [account, setAccount] = useState(null);
-  const [showLogin, setShowLogin] = useState(false);
+  /* The landing page is a separate bundle, so its "Log in" link cannot set
+     state here. It navigates to /?auth instead, which this reads once on
+     mount. The marker is stripped straight after so a refresh, or a back
+     navigation, does not reopen the sheet. */
+  const [showLogin, setShowLogin] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return new URLSearchParams(window.location.search).has("auth");
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("auth")) return;
+    url.searchParams.delete("auth");
+    window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+  }, []);
   const [sauna, setSauna] = useState(false);
   const [now, setNow] = useState(new Date());
 
@@ -974,11 +989,21 @@ export default function App() {
           <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: "0.18em", color: t.mute, marginLeft: "auto" }}>{settings.days}D / WK</span>
         {/* Padding cancelled by an equal negative margin, so the tap target is
             about 44px without changing the header height. */}
-        <button onClick={() => setShowLogin(true)} aria-label={account ? "Account" : "Sign in"} style={{
+        <button onClick={() => setShowLogin(true)}
+          aria-label={account ? "Profile, signed in" : "Profile, sign in"} style={{
           background: "none", border: "none", padding: 12, margin: -12, cursor: "pointer",
-          color: account ? t.live : t.mute, display: "flex", WebkitTapHighlightColor: "transparent",
+          color: account ? t.live : t.mute, display: "flex", alignItems: "center", gap: 6,
+          WebkitTapHighlightColor: "transparent",
         }}>
           <UserRound size={16} />
+          {/* The icon alone was too easy to miss mid-workout. The word carries the
+              primary text colour rather than the icon's state colour, so it stays
+              legible whether or not anyone is signed in; the icon keeps the state. */}
+          <span style={{
+            fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: "0.18em",
+            textTransform: "uppercase", color: t.text,
+            textDecoration: "underline", textUnderlineOffset: 3,
+          }}>Profile</span>
         </button>
         </div>
       </div>
