@@ -8,7 +8,10 @@ public launch.
 
 The app is becoming a multi-user product. Three stages, in order:
 
-1. **Now.** Single user, no accounts, everything in `localStorage`.
+1. **Now.** Single user, `localStorage` only for anyone who has not signed in.
+   The account layer exists in the repo — schema, data access layer, login screen,
+   background sync — and is wired up behind the account button. Nobody has been
+   invited yet.
 2. **Private beta, from roughly September 2026.** About a dozen friends, each with
    their own account and their own synced history.
 3. **Public launch, targeted late October 2026.** Open self-serve sign-up, and the
@@ -30,8 +33,10 @@ Two product commitments follow from this, and both constrain how features get bu
   `index.html` -> `src/App.jsx`, and the marketing landing page at `landing.html` ->
   `src/Landing.jsx`. The landing page is a separate bundle on inline styles, no
   Tailwind, and `src/index.css` excludes it with `@source not`.
-- No backend yet. All persistence is `localStorage`, through the `store` adapter in
-  `src/App.jsx`. Supabase is being added alongside it, not in place of it. See Backend.
+- There is a backend now, and it is a mirror rather than the source of truth. Every
+  read and write still goes through the `localStorage` `store` adapter in
+  `src/App.jsx`; Supabase sits alongside it and catches up in the background. See
+  Backend.
 - Styling is mid-migration from inline styles to Tailwind v4. Strangler pattern:
   one component per PR, the app stays working throughout.
 - Semantic colour tokens live in `src/index.css` via `@theme inline`. Palettes swap
@@ -65,20 +70,126 @@ gives the same experience with none of that.
 
 **Custom SMTP is mandatory, not an optimisation.** Without it Supabase Auth refuses
 to deliver mail to anyone outside the project team, so confirmation and password
-reset emails to friends silently never arrive. Resend is the chosen provider and is
-**not yet configured**. Until it is, sign-up appears to succeed and the confirmation
-email never arrives, so the beta cannot start. Steps are in `README.md`. With custom
-SMTP the default cap is 30 auth emails per hour, adjustable in the dashboard.
+reset emails to friends silently never arrive. Resend is now configured and sends
+from `flowfindr.com.au`, so the beta is no longer blocked on it. That moves the risk
+rather than removing it: bounces now count against our own domain reputation, and
+that domain also carries Google Workspace business mail. Read **Email and auth
+testing** below before touching anything that sends mail. Setup steps are in
+`README.md`; `scripts/auth-config.sh` reads and changes the settings through the
+Management API.
 
 Tables are `profiles`, `workouts` (one row per user per day), and `plans` (one row
 per user per customised template). The `jsonb` columns hold the same objects the app
 already builds, so `logs` can be rebuilt on login in the exact shape `src/App.jsx`
 expects and no read site changes.
 
-Schema lives in `supabase/migrations/`. `src/data/` holds the access layer: `client.js`
+Schema lives in `supabase/migrations/`: `0001_accounts.sql` creates the three tables
+with RLS, and `0002_lock_down_trigger_functions.sql` revokes `execute` on the trigger
+helpers, which were otherwise reachable as `/rest/v1/rpc/` endpoints. Postgres fires
+triggers without checking `execute` on the caller, so the revoke closes the endpoint
+and leaves the triggers working. `src/data/` holds the access layer: `client.js`
 (null when the env vars are absent), `auth.js`, `sync.js` (the write queue), and
-`index.js`, the only module the app may import from. Nothing imports `src/data/` yet,
-so it stays out of the bundle until the App wiring PR lands.
+`index.js`, the only module the app may import from.
+
+**The app is wired to it, lazily.** `src/Login.jsx` is the one component that imports
+`src/data/` at the top level, and `src/App.jsx` reaches it only through dynamic
+`import("./data")` — once to subscribe to auth changes, and once per local write to
+mirror the change into the queue. `Login` itself is `lazy()`, so a logged-out user who
+never opens the account sheet downloads neither the login screen nor the Supabase SDK.
+Keep it that way: a static `import` of `src/data/` from `src/App.jsx` drags the SDK
+into the initial bundle for everyone.
+
+## Email and auth testing
+
+Supabase previously flagged this project for a high bounce rate on its built-in
+email provider. That provider only delivers to Supabase org team members, so every
+external signup bounced by definition. Custom SMTP now runs through Resend on
+`flowfindr.com.au`.
+
+The consequence has moved, not disappeared. Bounces now count against our own
+domain reputation, and that domain also carries Google Workspace business mail. A
+suspension would take down real correspondence, not just app signups.
+
+- NEVER send auth email to a fabricated address. `test@test.com`, `foo@example.com`
+  and `a@a.com` hard bounce every time and are the single largest source of the
+  original problem.
+- NEVER run signup, password reset, or magic link flows against the hosted Supabase
+  project during local development. Run `supabase start` and read the mail in
+  Mailpit at `http://localhost:54324`, which sends nothing externally and accepts
+  any address.
+- When a test genuinely needs the hosted project, use Gmail plus-addressing
+  (`gus+ff1@gmail.com`, `gus+ff2@gmail.com`). Real deliverable addresses, one
+  inbox, unlimited variants.
+- Delete test users from Auth > Users after each run. Leaving them behind means
+  repeat flows keep hitting stale addresses.
+- NEVER enable click tracking in Resend. It rewrites links, and mail scanners
+  following a rewritten link consume the single-use token before the user clicks.
+  The user then sees "token expired".
+- Ask before changing SMTP settings, Supabase auth rate limits, Resend domain
+  configuration, or any DNS record on `flowfindr.com.au`.
+
+### Budgets
+
+- Resend free tier: 100 emails per day, 3000 per month. Sending pauses at the daily
+  cap, which means auth email stops until the window resets.
+- Supabase auth rate limit is set above the 30/hour default but must stay under the
+  Resend daily cap in aggregate.
+- Keep bounce rate under 2% and complaint rate under 0.1%. Resend runs on Amazon
+  SES, which opens a review around 5% bounce and suspends near 10%.
+
+### Config reference
+
+| Setting | Value |
+| --- | --- |
+| SMTP host | `smtp.resend.com` |
+| SMTP port | `587` |
+| SMTP username | `resend` (literal, not an email address) |
+| SMTP password | Resend API key, sending-only, scoped to the domain |
+| Sender | `no-reply@flowfindr.com.au` |
+| Resend region | Tokyo (`ap-northeast-1`), fixed at domain creation |
+| Sending domain | `flowfindr.com.au`, DKIM at `resend._domainkey`, SPF at `send` |
+
+DNS note: `dc-fd741b8612._spfm.send` looks like junk but is the include target of
+the `send` SPF record. Deleting it breaks Resend SPF.
+
+### Reading an SMTP failure
+
+Both signatures below were observed on 24 Aug 2026. The HTTP response is useless for
+diagnosis -- it only ever says `Error sending confirmation email` -- so read
+`auth_logs` instead.
+
+| In `auth_logs` | HTTP | Means |
+| --- | --- | --- |
+| `535 "Invalid username"` | 500 | SMTP auth rejected. The username is not the sender address and not the account email; it is the literal string `resend`. |
+| `context deadline exceeded`, `request_timeout`, duration exactly 10s | 504 | TCP connects but the TLS handshake never completes, so port and TLS mode disagree. 465 is implicit TLS; 587 and 2587 are STARTTLS. Use 587. |
+
+Query it with:
+
+```sql
+select timestamp, event_message from logs
+where source = 'auth_logs' and event_message ilike '%error%'
+order by timestamp desc limit 10
+```
+
+A failed send rolls the signup back, so `auth.users` stays clean and the same address
+can be reused on the next attempt. Confirm with
+`select id, email from auth.users order by created_at` rather than assuming.
+
+To check whether custom SMTP is live at all, look for the rate limit line at the last
+config reload: `Email limiter from 2/1h to 30` means Supabase accepted a custom SMTP
+config. Built-in sends log `mail_from: noreply@mail.app.supabase.io`; a send through
+Resend logs the configured sender instead.
+
+### Verification after any auth email change
+
+- Send to a real address you control, then check Resend Logs shows Delivered rather
+  than Bounced.
+- In Gmail, use Show original and confirm SPF: PASS and DKIM: PASS with
+  `flowfindr.com.au` as the signing domain.
+- Confirm the confirmation link resolves to the intended environment. Preview
+  deployments need their URL pattern present in Supabase URL Configuration or the
+  link dead-ends.
+- Report these as raw output, not as a summary.
 
 ## Migration status
 
@@ -91,6 +202,9 @@ churning call sites twice. `Chip` never took one.
 
 `Label` carries a fifth role, `text`, on top of the three fixed role names, because
 one call site prints the date in the primary text colour.
+
+`src/Login.jsx` is not part of the migration. It was built on token classes from the
+start, so there is no inline-style version of it to convert.
 
 ## Token roles
 
@@ -126,7 +240,7 @@ Themes: `ultraviolet-circuit` (default), `nightdrive`, `cyan-prime`.
 - Only make changes directly requested. Do not add features, abstractions, config
   files, or refactor beyond what was asked.
 
-Backend rules, once Supabase lands:
+Backend rules:
 
 - NEVER import `supabase` directly in `src/App.jsx` or any component. All data access
   goes through `src/data/`, so the provider stays swappable and the lock-in stays in
@@ -138,6 +252,15 @@ Backend rules, once Supabase lands:
   into the browser bundle. The publishable key (`VITE_SUPABASE_PUBLISHABLE_KEY`)
   belongs there. The `service_role` key and any Supabase personal access token must
   never appear in the repo, in Vercel, or in a chat window.
+- `.env` is tracked in git **on purpose** and this is not a leak. It holds only
+  `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`, both of which ship inside
+  the browser bundle anyway, and committing them stops Preview and Production
+  drifting apart while letting a fresh clone build. Row Level Security, not key
+  secrecy, is what separates one user's history from another's. Do not raise this as
+  a security finding, and do not "fix" it by gitignoring the file. Genuine secrets
+  live in `.env.local`, which `*.local` already excludes. If auditing, check that
+  `.env` still contains only those two `VITE_` keys rather than assuming the worst
+  from the filename.
 - NEVER let a write block the UI on the network. Write local, queue, flush in the
   background.
 - Every user-owned table carries `user_id` and `updated_at` from the start, even when
@@ -168,8 +291,10 @@ Backend rules, once Supabase lands:
 - The palette exists in three places: `THEMES` in `src/App.jsx`, the `[data-theme]`
   blocks in `src/index.css`, and `THEMES` in `src/theme.js` for the landing page.
   Change a hex in one and the others diverge silently. No build check catches it.
-  A login screen adds a fourth surface that has to match: import from `src/theme.js`
-  rather than retyping hexes.
+  The login screen avoided becoming a fourth copy: it uses token classes, which
+  resolve against the `data-theme` attribute already on the app's root wrapper, and
+  imports `MONO` from `src/theme.js` rather than retyping it. Do the same for any
+  new surface.
 - One workout per user per day. The `unique (user_id, date)` constraint mirrors what
   the app already does, since `logs[todayKey]` overwrites. Someone training twice in
   a day loses the first session. Not a regression, but now it is written down.

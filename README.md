@@ -219,11 +219,16 @@ curl -X PATCH "https://api.supabase.com/v1/projects/$PROJECT_REF/config/auth" \
 With custom SMTP configured the default cap is 30 auth emails per hour, adjustable on the
 project's Auth rate limits page. Twelve friends signing up will not come close.
 
-**Environment.** Two variables, `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`, in
-`.env.local` locally and in the Vercel project for both Production and Preview. Vite bakes
-these in at build time, so existing deployments do not pick up a change until they are
-rebuilt. Anything prefixed `VITE_` is public by definition; the `service_role` key must
-never go near it. `.env.local` is already covered by the `*.local` rule in `.gitignore`.
+**Environment.** Two variables, `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
+Both are committed to `.env`, on purpose: Vite compiles `VITE_*` into the browser bundle,
+so neither can be secret, and keeping them in the repo stops Preview and Production
+drifting apart while letting a fresh clone build a working app. Row Level Security, not
+the obscurity of the key, is what separates one person's history from another's.
+
+Vite bakes these in at build time, so a deployment does not pick up a change until it is
+rebuilt. `.env.local` overrides `.env` locally and is covered by the `*.local` rule in
+`.gitignore`; that is where anything genuinely secret goes, such as the `service_role`
+key or a Supabase personal access token. Neither may ever carry a `VITE_` prefix.
 
 The publishable key (`sb_publishable_...`) is used rather than the legacy JWT anon key,
 because it rotates independently of the project's JWT secret.
