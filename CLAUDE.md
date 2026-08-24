@@ -42,8 +42,10 @@ Two product commitments follow from this, and both constrain how features get bu
 
 ## Backend
 
-Supabase (hosted Postgres plus auth). Org `Flowfindr`, project `FlowFindr-v1.5`,
-region `ap-northeast-1`. Chosen over AWS because it is plain Postgres underneath:
+Supabase (hosted Postgres plus auth). Org `Flowfindr`, project `FlowFindr-Fitness`,
+ref `qnnqnyptmhznlfiszvtn`, region `ap-southeast-2` (Sydney). Region is fixed at
+creation, so the earlier Tokyo and Singapore projects were replaced rather than moved.
+Chosen over AWS because it is plain Postgres underneath:
 `pg_dump` moves the data to RDS or anywhere else without a rewrite, so the choice is
 reversible. The lock-in that does exist sits in the auth layer and the client SDK,
 which is what the data access layer below is for.
@@ -63,13 +65,20 @@ gives the same experience with none of that.
 
 **Custom SMTP is mandatory, not an optimisation.** Without it Supabase Auth refuses
 to deliver mail to anyone outside the project team, so confirmation and password
-reset emails to friends silently never arrive. Resend is wired in for this. With
-custom SMTP the default cap is 30 auth emails per hour, adjustable in the dashboard.
+reset emails to friends silently never arrive. Resend is the chosen provider and is
+**not yet configured**. Until it is, sign-up appears to succeed and the confirmation
+email never arrives, so the beta cannot start. Steps are in `README.md`. With custom
+SMTP the default cap is 30 auth emails per hour, adjustable in the dashboard.
 
 Tables are `profiles`, `workouts` (one row per user per day), and `plans` (one row
 per user per customised template). The `jsonb` columns hold the same objects the app
 already builds, so `logs` can be rebuilt on login in the exact shape `src/App.jsx`
 expects and no read site changes.
+
+Schema lives in `supabase/migrations/`. `src/data/` holds the access layer: `client.js`
+(null when the env vars are absent), `auth.js`, `sync.js` (the write queue), and
+`index.js`, the only module the app may import from. Nothing imports `src/data/` yet,
+so it stays out of the bundle until the App wiring PR lands.
 
 ## Migration status
 
@@ -126,7 +135,8 @@ Backend rules, once Supabase lands:
   `using` and `with check`. The anon key ships in the bundle; RLS is the only thing
   separating one user's training history from another's.
 - NEVER put a secret in a `VITE_` variable. Anything prefixed `VITE_` is compiled
-  into the browser bundle. The anon key belongs there. The `service_role` key must
+  into the browser bundle. The publishable key (`VITE_SUPABASE_PUBLISHABLE_KEY`)
+  belongs there. The `service_role` key and any Supabase personal access token must
   never appear in the repo, in Vercel, or in a chat window.
 - NEVER let a write block the UI on the network. Write local, queue, flush in the
   background.

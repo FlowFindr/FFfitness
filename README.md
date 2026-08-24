@@ -143,7 +143,10 @@ Supabase queries. Do not. That version of the app breaks in a gym basement, wher
 network is worst and logging a set matters most. Supabase goes *alongside* the storage
 adapter, not in place of it.
 
-**Provider.** Supabase: hosted Postgres with auth attached. It was picked over AWS
+**Provider.** Supabase: hosted Postgres with auth attached. Org `Flowfindr`, project
+`FlowFindr-Fitness`, ref `qnnqnyptmhznlfiszvtn`, region `ap-southeast-2` (Sydney).
+Region cannot be changed after a project is created, so getting Sydney meant a new
+project rather than an edit. It was picked over AWS
 (Cognito plus DynamoDB or RDS plus API Gateway) because it is plain Postgres underneath,
 so `pg_dump` moves the data to RDS or anywhere else without a rewrite. The AWS stack is
 several times the setup for a solo developer and has no equivalent of Row Level Security,
@@ -176,14 +179,64 @@ of it.
 
 **Email.** A custom SMTP provider is required, not optional. Without one, Supabase Auth
 refuses to deliver mail to any address outside the project team, so confirmation and
-password-reset emails to friends silently never arrive. With custom SMTP configured the
-default cap is 30 auth emails per hour, adjustable in the dashboard.
+password-reset emails to friends silently never arrive. **This is not configured yet, and
+it is the one thing blocking the beta** — sign-up will appear to work while the
+confirmation email goes nowhere.
 
-**Environment.** Two variables, `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`, in
+Setting it up, in order:
+
+1. Create a Resend account and add `flowfindr.com.au` as a sending domain.
+2. Publish the DKIM and SPF records Resend gives you on the domain's DNS. Until the
+   domain verifies, Resend will only deliver to your own address, which fails in exactly
+   the same silent way as having no SMTP at all.
+3. Create a Resend SMTP credential. The host is `smtp.resend.com`, port `587`, username
+   `resend`, password the API key.
+4. Either paste those into the dashboard at Authentication -> Emails -> SMTP, or apply
+   them with the Management API:
+
+```bash
+# Token from https://supabase.com/dashboard/account/tokens — treat it as a secret.
+export SUPABASE_ACCESS_TOKEN="..."
+export PROJECT_REF="qnnqnyptmhznlfiszvtn"
+
+curl -X PATCH "https://api.supabase.com/v1/projects/$PROJECT_REF/config/auth" \
+  -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "external_email_enabled": true,
+    "mailer_autoconfirm": false,
+    "smtp_admin_email": "no-reply@flowfindr.com.au",
+    "smtp_host": "smtp.resend.com",
+    "smtp_port": 587,
+    "smtp_user": "resend",
+    "smtp_pass": "YOUR_RESEND_API_KEY",
+    "smtp_sender_name": "FlowFindr Fitness"
+  }'
+```
+
+5. Send yourself a password reset and confirm it arrives.
+
+With custom SMTP configured the default cap is 30 auth emails per hour, adjustable on the
+project's Auth rate limits page. Twelve friends signing up will not come close.
+
+**Environment.** Two variables, `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`, in
 `.env.local` locally and in the Vercel project for both Production and Preview. Vite bakes
 these in at build time, so existing deployments do not pick up a change until they are
 rebuilt. Anything prefixed `VITE_` is public by definition; the `service_role` key must
-never go near it.
+never go near it. `.env.local` is already covered by the `*.local` rule in `.gitignore`.
+
+The publishable key (`sb_publishable_...`) is used rather than the legacy JWT anon key,
+because it rotates independently of the project's JWT secret.
+
+**Data layer.** `supabase/migrations/` holds the schema. `src/data/` holds the access
+layer and is the only place allowed to import `supabase`:
+
+| Module | Does |
+| --- | --- |
+| `client.js` | Creates the client, or exports `null` when the env vars are absent. Every caller treats `null` as "carry on locally". |
+| `auth.js` | Sign up, sign in, sign out, password reset, auth-change subscription. Resolves rather than throws; logged-out is a normal state. |
+| `sync.js` | The write queue. One pending op per `(table, key)`, drained on `online` and on tab focus. A failed flush leaves the queue intact and is never shown to the user. |
+| `index.js` | The barrel the app imports from. |
 
 ## Before making it public
 
