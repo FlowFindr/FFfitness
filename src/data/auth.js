@@ -23,7 +23,16 @@ export const signUp = async (email, password, displayName) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { display_name: displayName ?? null } },
+      options: {
+        data: { display_name: displayName ?? null },
+        /* Without this, Supabase falls back to the project's Site URL for the
+           confirmation link, which sends everyone to one fixed origin no matter
+           where they signed up. Using the current origin means the link returns
+           to the deployment the person actually used: production, a preview, or
+           localhost. Every origin used this way must also appear in the project's
+           redirect allow-list, or Supabase ignores it and falls back anyway. */
+        emailRedirectTo: `${window.location.origin}/index.html`,
+      },
     });
     return { user: data?.user ?? null, error: error?.message ?? null };
   } catch (e) {
