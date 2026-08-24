@@ -40,6 +40,9 @@ export const queueSettings = (settings) =>
 export const queueWorkout = (dateKey, entry) =>
   enqueue({ table: "workouts", key: dateKey, op: "upsert", value: entry });
 
+export const queueWorkoutDelete = (dateKey) =>
+  enqueue({ table: "workouts", key: dateKey, op: "delete", value: null });
+
 export const queuePlan = (templateId, exercises) =>
   enqueue({ table: "plans", key: templateId, op: "upsert", value: exercises });
 
@@ -54,6 +57,9 @@ const applyOp = async (userId, op) => {
               { onConflict: "user_id" });
   }
   if (op.table === "workouts") {
+    if (op.op === "delete") {
+      return supabase.from("workouts").delete().eq("user_id", userId).eq("date", op.key);
+    }
     const e = op.value ?? {};
     return supabase.from("workouts").upsert(
       {

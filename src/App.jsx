@@ -49,6 +49,20 @@ const THEMES = {
 const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 const SANS = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 
+/* Which top-level keys differ between two plain-JSON maps, as
+   [changed, removed]. logs is keyed by date and custom by template id, and both
+   mirror to one database row per key, so a whole-object save has to be reduced
+   to the rows that actually moved. A stringify compare is enough here: both
+   objects are built by this file from JSON primitives, and the cost of a false
+   positive is one redundant upsert, which is idempotent. */
+const diffKeys = (before, after) => {
+  const a = after ?? {};
+  const b = before ?? {};
+  const changed = Object.keys(a).filter((k) => JSON.stringify(b[k]) !== JSON.stringify(a[k]));
+  const removed = Object.keys(b).filter((k) => !(k in a));
+  return [changed, removed];
+};
+
 /* ---------------- storage ---------------- */
 const mem = {};
 const store = {
@@ -898,9 +912,40 @@ export default function App() {
     return () => { dead = true; stop?.(); };
   }, []);
 
-  const saveSettings = (n) => { setSettings(n); store.set("fff:settings", n); };
-  const saveLogs = (n) => { setLogs(n); store.set("fff:logs", n); };
-  const saveCustom = (n) => { setCustom(n); store.set("fff:custom", n); };
+  /* Mirror a local write into the background queue. Three things matter here.
+     Signed-out users return early, so they create no rows and never pay for the
+     Supabase chunk. The import is dynamic for the same reason. And nothing is
+     awaited: local state and localStorage are already updated by the time this
+     runs, so a flat network or a paused project cannot reach the UI. */
+  const mirror = useCallback((fn) => {
+    if (!account) return;
+    import("./data").then(fn).catch(() => {});
+  }, [account]);
+
+  const saveSettings = (n) => {
+    setSettings(n); store.set("fff:settings", n);
+    mirror((d) => d.queueSettings(n));
+  };
+
+  const saveLogs = (n) => {
+    const before = logs;
+    setLogs(n); store.set("fff:logs", n);
+    mirror((d) => {
+      const [changed, removed] = diffKeys(before, n);
+      changed.forEach((k) => d.queueWorkout(k, n[k]));
+      removed.forEach((k) => d.queueWorkoutDelete(k));
+    });
+  };
+
+  const saveCustom = (n) => {
+    const before = custom;
+    setCustom(n); store.set("fff:custom", n);
+    mirror((d) => {
+      const [changed, removed] = diffKeys(before, n);
+      changed.forEach((k) => d.queuePlan(k, n[k]));
+      removed.forEach((k) => d.queuePlanDelete(k));
+    });
+  };
 
   const finish = (entries, elapsed) => {
     saveLogs({ ...logs, [todayKey(new Date())]: { sessionId: running.id, name: running.name, entries, elapsed } });
